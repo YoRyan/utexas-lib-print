@@ -1,4 +1,8 @@
-Print your stuff with a Python script instead of a web interface.
+A CLI program to send documents to UT Austin library
+[printers](http://www.lib.utexas.edu/services/copyprint/).
+
+This is a faster and simpler alternative to the official web
+[interface](https://print.lib.utexas.edu/myprintcenter/).
 
 ```
 usage: utprint.py [-h] [-m] [-d] [-p {1,2}] [-c COPIES] [-r RANGE]
