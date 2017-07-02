@@ -49,13 +49,37 @@ class PrintCenter:
 
     PRINT_SERVER = "https://print.lib.utexas.edu/PharosAPI"
 
-    class LogonException(Exception):
-        """Pharos login error."""
+    Error = namedtuple("Error", ["status", "user_message", "error_code",
+                                 "request"])
+
+    class Error(Exception):
+        """Base class for exceptions."""
         pass
 
-    class UploadException(Exception):
-        """Pharos document upload error."""
-        pass
+    class PharosAPIError(Error):
+        """Error status returned by the Pharos API."""
+        def __init__(self, error_json):
+            self.status = error_json["Status"]
+            self.user_message = error_json["UserMessage"]
+            self.error_code = error_json["ErrorCode"]
+            self.request_url = error_json["Request"]
+
+    def logon_with_cookie(pharos_user_token):
+        """Resume a session with Pharos.
+
+        pharos_user_token -- value of the PharosAPI.X-PHAROS-USER-TOKEN cookie
+
+        Return a Requests.Session to interact with the Pharos API.
+        """
+        session = requests.Session()
+        session.cookies.set("PharosAPI.X-PHAROS-USER-TOKEN", pharos_user_token)
+        response = session.get(PrintCenter.PRINT_SERVER + "/logon")
+        if response.status_code == requests.codes.ok:
+            # Now includes additional cookies set by Pharos.
+            return session
+        else:
+            session.close()
+            raise PrintCenter.PharosAPIError(response.json())
 
     def logon(credentials):
         """Initiate a session with Pharos.
@@ -71,12 +95,12 @@ class PrintCenter:
                                       encode_utf8_to_b64(credentials[0] + ":" +
                                                          credentials[1]))
         session = requests.Session()
-        resp = session.get(PrintCenter.PRINT_SERVER + "/logon", headers=headers)
-        if resp.status_code == requests.codes.ok:
+        response = session.get(PrintCenter.PRINT_SERVER + "/logon", headers=headers)
+        if response.status_code == requests.codes.ok:
             return session
         else:
             session.close()
-            raise PrintCenter.LogonException(PrintCenter._error_msg(resp))
+            raise PrintCenter.PharosAPIError(response.json())
 
     def upload_file(session, options, filepath):
         """Upload a file to Pharos.
@@ -92,15 +116,12 @@ class PrintCenter:
             ("content", (os.path.basename(filepath), open(filepath, "rb"),
                          mimetype(filepath)))
         ]
-        resp = session.post(PrintCenter._user_uri(session) + "/printjobs",
+        response = session.post(PrintCenter._user_uri(session) + "/printjobs",
                             files=files)
-        if resp.status_code == requests.codes.created:
-            try:
-                return resp.json()
-            except ValueError:
-                raise PrintCenter.UploadException("warning: bad server response")
+        if response.status_code == requests.codes.created:
+            return response.json()
         else:
-            raise PrintCenter.UploadException(PrintCenter._error_msg(resp))
+            raise PrintCenter.PharosAPIError(response.json())
 
     def _user_uri(session):
         """Extract user's API endpoint from the cookie jar.
@@ -109,19 +130,6 @@ class PrintCenter:
         """
         return (PrintCenter.PRINT_SERVER +
                 session.cookies["PharosAPI.X-PHAROS-USER-URI"])
-
-    def _error_msg(response):
-        """Format an error message derived from a bad Requests response.
-
-        response -- Requests.Response from a Requests.Request (ugh)
-        """
-        # TODO: handle networking errors
-        try:
-            rj = response.json()
-            return str(response.status_code) + " error: " + rj["UserMessage"]
-        except ValueError:
-            return ("unknown " + str(response.status_code) + " error: " +
-                    response.body)
 
 def main():
     # read config file
@@ -161,27 +169,38 @@ def main():
         "PrinterName": None
     }
 
-    # read EID credentials
-    creds = get_credentials()
-    print()
+    session = None
 
-    # login and upload each document
-    print("Logging in ...", end="")
-    with PrintCenter.logon(creds) as session:
-        print(" done")
-        for d in args.document:
-            print("Uploading " + d + " ...", end="")
-            try:
-                PrintCenter.upload_file(session, options, d)
-                print(" done")
-            except PrintCenter.UploadException as err:
-                print(" " + str(err))
+    # login, try saved cookie if it exists then prompt for credentials
+    if config.pharos_user_token is not None:
+        print("Logging in with saved token ... ", end="")
+        try:
+            resumed = PrintCenter.logon_with_cookie(config.pharos_user_token)
+            session = resumed
+            print("done")
+        except PrintCenter.PharosAPIError:
+            print("expired")
+    if session is None:
+        creds = get_credentials()
+        print("Logging in ... ", end="")
+        session = PrintCenter.logon(creds)
+        print("done")
+
+    # upload each document
+    for d in args.document:
+        print("Uploading " + d + " ... ", end="")
+        try:
+            PrintCenter.upload_file(session, options, d)
+            print("done")
+        except PrintCenter.PharosAPIError as err:
+            print(str(err.status) + " error: " + err.user_message)
 
     # save config file
     new_config = Config(color=config.color, sides=config.sides, pharos_user_token=
                         session.cookies["PharosAPI.X-PHAROS-USER-TOKEN"])
     write_config_file(new_config)
 
+    session.close()
     return 0
 
 def read_config_file():
@@ -221,8 +240,11 @@ def write_config_file(config):
         writer.write(f)
 
 def get_credentials():
-    # TODO: persistent storage
-    return (input("EID: "), getpass())
+    """Prompt for the user's EID and password."""
+    eid = input("\nEID: ")
+    password = getpass()
+    print()
+    return (eid, password)
 
 def encode_utf8_to_b64(s):
     """Emulates Pharos's DIY base-64 encoder."""
