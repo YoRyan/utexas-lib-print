@@ -34,7 +34,7 @@ from mimetypes import guess_type
 from urllib.parse import quote
 import argparse
 import configparser
-import os.path
+import os
 import requests
 import sys
 
@@ -42,7 +42,7 @@ import sys
 CONFIG_DIR = user_config_dir("utprint", "YoRyan")
 CONFIG_FILENAME = "config.ini"
 
-Config = namedtuple("Config", ["color", "sides"])
+Config = namedtuple("Config", ["color", "sides", "pharos_user_token"])
 
 class PrintCenter:
     """Library of functions that interact with the Pharos API."""
@@ -177,6 +177,11 @@ def main():
             except PrintCenter.UploadException as err:
                 print(" " + str(err))
 
+    # save config file
+    new_config = Config(color=config.color, sides=config.sides, pharos_user_token=
+                        session.cookies["PharosAPI.X-PHAROS-USER-TOKEN"])
+    write_config_file(new_config)
+
     return 0
 
 def read_config_file():
@@ -185,18 +190,35 @@ def read_config_file():
     Return a Config tuple."""
     color = "color"
     sides = 1
+    token = None
     parser = configparser.ConfigParser()
     parser.read(os.path.join(CONFIG_DIR, CONFIG_FILENAME))
-    if "PrintDefaults" in parser.sections():
-        if "Color" in parser["PrintDefaults"]:
-            fcolor = parser["PrintDefaults"]["Color"]
-            if fcolor == "color" or fcolor == "mono":
-                color = fcolor
-        if "Sides" in parser["PrintDefaults"]:
-            fsides = parser["PrintDefaults"]["Sides"]
-            if fsides == "1" or fsides == "2":
-                sides = int(fsides)
-    return Config(color=color, sides=sides)
+    sections = parser.sections()
+    if "PrintDefaults" in sections:
+        fcolor = parser["PrintDefaults"].get("Color", None)
+        if fcolor == "color" or fcolor == "mono":
+            color = fcolor
+        fsides = parser["PrintDefaults"].get("Sides", None)
+        if fsides == "1" or fsides == "2":
+            sides = int(fsides)
+    if "PersistentAuth" in sections:
+        token = parser["PersistentAuth"].get("Cookie", None)
+    return Config(color=color, sides=sides, pharos_user_token=token)
+
+def write_config_file(config):
+    """Save user preferences to the configuration file.
+
+    config -- Config tuple of stuff to save
+    """
+    writer = configparser.ConfigParser()
+    writer["PrintDefaults"] = {}
+    writer["PrintDefaults"]["Color"] = config.color
+    writer["PrintDefaults"]["Sides"] = str(config.sides)
+    writer["PersistentAuth"] = {}
+    writer["PersistentAuth"]["Cookie"] = config.pharos_user_token
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(os.path.join(CONFIG_DIR, CONFIG_FILENAME), "w") as f:
+        writer.write(f)
 
 def get_credentials():
     # TODO: persistent storage
