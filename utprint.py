@@ -119,31 +119,33 @@ def main():
     # command-line arguments
     parser = argparse.ArgumentParser(description=
                                      "Upload documents to UT's Library Print System.")
-    parser.add_argument("-m", "--mono", dest="mono", action="store_true",
-                        help="print without color (save money)")
-    parser.add_argument("-d", "--duplex", dest="duplex", action="store_true",
-                        help="print double sided (duplex)")
-    parser.add_argument("-p", "--pages", dest="pages", nargs=1,
-                        choices=["1", "2"], default=["1"],
+    parser.add_argument("--color", dest="color", choices=["color", "mono"], default="color",
+                        help="print with or without color")
+    parser.add_argument("--sides", dest="duplex", type=int, choices=[1, 2], default=1,
+                        help="print single sided (simplex) or double sided (duplex)")
+    parser.add_argument("--two-pps", dest="two_pages", action="store_true",
                         help="print two pages on each side of paper")
-    parser.add_argument("-c", "--copies", dest="copies", nargs=1,
-                        type=int, default=[1],
+    parser.add_argument("--copies", dest="copies", type=int, default=1,
                         help="print multiple copies")
-    parser.add_argument("-r", "--range", dest="range", nargs=1, default=[""],
+    parser.add_argument("--range", dest="range", default="",
                         help="print a specific set of pages (e.g. '1-5, 8, 11-13')")
     parser.add_argument("document", nargs="+",
                         help="a file (PDF, image, MS Office...) to print")
     args = parser.parse_args()
 
     # build print settings JSON
+    if args.two_pages:
+        pps = "2"
+    else:
+        pps = "1"
     options = {
         "FinishingOptions": {
-            "Mono": args.mono,
-            "Duplex": args.duplex,
-            "PagesPerSide": args.pages[0],
-            "Copies": str(args.copies[0]),
+            "Mono": args.color == "mono",
+            "Duplex": args.duplex == 2,
+            "PagesPerSide": pps,
+            "Copies": str(args.copies),
             "DefaultPageSize": "Letter", # what's this? not in the web UI
-            "PageRange": args.range[0]
+            "PageRange": args.range
         },
         "PrinterName": None
     }
