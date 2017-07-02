@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# coding: utf-8
+# -*- coding: utf-8 -*-
 
 # utprint.py
 """ A simple CLI client for UT's Library Print System. """
@@ -96,7 +96,7 @@ class PrintCenter:
 
     def _user_uri(session):
         """Extract user's API endpoint from the cookie jar.
-        
+
         session -- Requests.Session from logon()
         """
         return (PrintCenter.PRINT_SERVER +
