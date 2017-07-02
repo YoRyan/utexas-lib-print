@@ -90,12 +90,15 @@ class PrintCenter:
         """
         credentials = (encode_uricomp(credentials[0]),
                        encode_uricomp(credentials[1]))
+        params = {}
+        params["KeepMeLoggedIn"] = "yes"
         headers = {}
         headers["X-Authorization"] = ("PHAROS-USER " +
                                       encode_utf8_to_b64(credentials[0] + ":" +
                                                          credentials[1]))
         session = requests.Session()
-        response = session.get(PrintCenter.PRINT_SERVER + "/logon", headers=headers)
+        response = session.get(PrintCenter.PRINT_SERVER + "/logon",
+                               params=params, headers=headers)
         if response.status_code == requests.codes.ok:
             return session
         else:
