@@ -25,16 +25,24 @@
 # THE SOFTWARE.
 
 
+from appdirs import user_config_dir
 from base64 import b64encode
+from collections import namedtuple
 from getpass import getpass
 from json import dumps
 from mimetypes import guess_type
-from os.path import basename
 from urllib.parse import quote
 import argparse
+import configparser
+import os.path
 import requests
 import sys
 
+
+CONFIG_DIR = user_config_dir("utprint", "YoRyan")
+CONFIG_FILENAME = "config.ini"
+
+Config = namedtuple("Config", ["color", "sides"])
 
 class PrintCenter:
     """Library of functions that interact with the Pharos API."""
@@ -81,7 +89,7 @@ class PrintCenter:
         """
         files = [
             ("MetaData", (None, dumps(options))),
-            ("content", (basename(filepath), open(filepath, "rb"),
+            ("content", (os.path.basename(filepath), open(filepath, "rb"),
                          mimetype(filepath)))
         ]
         resp = session.post(PrintCenter._user_uri(session) + "/printjobs",
@@ -116,12 +124,15 @@ class PrintCenter:
                     response.body)
 
 def main():
+    # read config file
+    config = read_config_file()
+
     # command-line arguments
     parser = argparse.ArgumentParser(description=
                                      "Upload documents to UT's Library Print System.")
-    parser.add_argument("--color", dest="color", choices=["color", "mono"], default="color",
+    parser.add_argument("--color", dest="color", choices=["color", "mono"], default=config.color,
                         help="print with or without color")
-    parser.add_argument("--sides", dest="duplex", type=int, choices=[1, 2], default=1,
+    parser.add_argument("--sides", dest="sides", type=int, choices=[1, 2], default=config.sides,
                         help="print single sided (simplex) or double sided (duplex)")
     parser.add_argument("--two-pps", dest="two_pages", action="store_true",
                         help="print two pages on each side of paper")
@@ -141,7 +152,7 @@ def main():
     options = {
         "FinishingOptions": {
             "Mono": args.color == "mono",
-            "Duplex": args.duplex == 2,
+            "Duplex": args.sides == 2,
             "PagesPerSide": pps,
             "Copies": str(args.copies),
             "DefaultPageSize": "Letter", # what's this? not in the web UI
@@ -167,6 +178,25 @@ def main():
                 print(" " + str(err))
 
     return 0
+
+def read_config_file():
+    """Read user preferences from the configuration file.
+
+    Return a Config tuple."""
+    color = "color"
+    sides = 1
+    parser = configparser.ConfigParser()
+    parser.read(os.path.join(CONFIG_DIR, CONFIG_FILENAME))
+    if "PrintDefaults" in parser.sections():
+        if "Color" in parser["PrintDefaults"]:
+            fcolor = parser["PrintDefaults"]["Color"]
+            if fcolor == "color" or fcolor == "mono":
+                color = fcolor
+        if "Sides" in parser["PrintDefaults"]:
+            fsides = parser["PrintDefaults"]["Sides"]
+            if fsides == "1" or fsides == "2":
+                sides = int(fsides)
+    return Config(color=color, sides=sides)
 
 def get_credentials():
     # TODO: persistent storage
