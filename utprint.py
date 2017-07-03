@@ -223,26 +223,26 @@ def main():
 
     # login, try saved cookie if it exists then prompt for credentials
     if config.pharos_user_token is not None:
-        print("Logging in with saved token ... ", end="")
+        new_script_status("Logging in with saved token")
         try:
             resumed = PrintCenter.logon_with_cookie(config.pharos_user_token)
             session = resumed
-            print("done")
+            end_script_status("done")
         except PrintCenter.PharosAPIError:
-            print("expired")
+            end_script_status("expired")
     if session is None:
         creds = get_credentials()
-        print("Logging in ... ", end="")
+        new_script_status("Logging in")
         session = PrintCenter.logon(creds)
-        print("done")
+        end_script_status("done")
 
     # upload document
-    print("Uploading " + args.document + " ... ", end="")
+    new_script_status("Uploading " + args.document)
     job = PrintCenter.upload_file(session, options, args.document)
-    print("done")
+    end_script_status("done")
 
     # wait for document to process
-    print("Processing ... ", end="")
+    new_script_status("Processing")
     job_processed = False
     while not job_processed:
         sleep(3)
@@ -250,7 +250,7 @@ def main():
         job_now = next((j for j in jobs if j.uid == job.uid), None)
         if job_now is not None and job_now.state == "Completed":
             job_processed = True
-    print("done")
+    end_script_status("done")
 
     # save config file
     new_config = Config(color=config.color, sides=config.sides, pharos_user_token=
@@ -295,6 +295,13 @@ def write_config_file(config):
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(os.path.join(CONFIG_DIR, CONFIG_FILENAME), "w") as f:
         writer.write(f)
+
+def new_script_status(status):
+    print(status + " ... ", end="")
+    sys.stdout.flush()
+
+def end_script_status(result):
+    print(result)
 
 def get_credentials():
     """Prompt for the user's EID and password."""
