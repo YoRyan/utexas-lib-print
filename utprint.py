@@ -248,6 +248,11 @@ def main():
         balance = logon[1]
         end_script_status("done")
 
+    # save authentication cookie to config file
+    new_config = Config(color=config.color, sides=config.sides, pharos_user_token=
+                        session.cookies["PharosAPI.X-PHAROS-USER-TOKEN"])
+    write_config_file(new_config)
+
     # upload document
     new_script_status("Uploading " + os.path.basename(args.document))
     job = PrintCenter.upload_file(session, options, args.document)
@@ -275,11 +280,6 @@ def main():
         print("    Remaining balance: " + money(balance - job_cost))
     else:
         print("  * Insufficent funds -- add Bevo Bucks at\n    " + BEVO_BUCKS_URL)
-
-    # save config file
-    new_config = Config(color=config.color, sides=config.sides, pharos_user_token=
-                        session.cookies["PharosAPI.X-PHAROS-USER-TOKEN"])
-    write_config_file(new_config)
 
     session.close()
     return 0
