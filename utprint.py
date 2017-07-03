@@ -31,6 +31,7 @@ from collections import namedtuple
 from getpass import getpass
 from json import dumps
 from mimetypes import guess_type
+from time import sleep
 from urllib.parse import quote
 import argparse
 import configparser
@@ -48,6 +49,8 @@ class PrintCenter:
     """Library of functions that interact with the Pharos API."""
 
     PRINT_SERVER = "https://print.lib.utexas.edu/PharosAPI"
+
+    Job = namedtuple("Job", ["uid", "state", "cost"])
 
     class Error(Exception):
         """Base class for exceptions."""
@@ -119,11 +122,32 @@ class PrintCenter:
                          mimetype(filepath)))
         ]
         response = session.post(PrintCenter._user_uri(session) + "/printjobs",
-                            files=files)
+                                files=files)
+        response_json = response.json()
         if response.status_code == requests.codes.created:
-            return response.json()
+            return PrintCenter.Job(uid=response_json["Location"],
+                                   state=response_json["Activity"]["State"],
+                                   cost=0.0)
         else:
-            raise PrintCenter.PharosAPIError(response.json())
+            raise PrintCenter.PharosAPIError(response_json)
+
+    def get_jobs(session):
+        """Get the list of all queued print jobs.
+
+        session -- Request.Session from logon()
+        """
+        response = session.get(PrintCenter._user_uri(session) + "/printjobs")
+        response_json = response.json()
+        if response.status_code == requests.codes.ok:
+            jobs = []
+            for item in response_json["Items"]:
+                job = PrintCenter.Job(uid=item["Location"],
+                                      state=item["Activity"]["State"],
+                                      cost=float(item.get("Cost", "0.0")))
+                jobs.append(job)
+            return jobs
+        else:
+            raise PrintCenter.PharosAPIError(response_json)
 
     def _user_uri(session):
         """Extract user's API endpoint from the cookie jar.
@@ -214,7 +238,18 @@ def main():
 
     # upload document
     print("Uploading " + args.document + " ... ", end="")
-    PrintCenter.upload_file(session, options, args.document)
+    job = PrintCenter.upload_file(session, options, args.document)
+    print("done")
+
+    # wait for document to process
+    print("Processing ... ", end="")
+    job_processed = False
+    while not job_processed:
+        sleep(3)
+        jobs = PrintCenter.get_jobs(session)
+        job_now = next((j for j in jobs if j.uid == job.uid), None)
+        if job_now is not None and job_now.state == "Completed":
+            job_processed = True
     print("done")
 
     # save config file
