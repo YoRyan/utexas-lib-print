@@ -63,6 +63,8 @@ class PrintCenter:
             self.user_message = error_json["UserMessage"]
             self.error_code = error_json["ErrorCode"]
             self.request_url = error_json["Request"]
+            super().__init__("[Status " + str(self.status) + "] " +
+                             self.user_message)
 
     def logon_with_cookie(pharos_user_token):
         """Resume a session with Pharos.
@@ -214,12 +216,9 @@ def main():
         print("done")
 
     # upload document
-    try:
-        print("Uploading " + args.document + " ... ", end="")
-        PrintCenter.upload_file(session, options, args.document)
-        print("done")
-    except PrintCenter.PharosAPIError as err:
-        print(str(err.status) + " error: " + err.user_message)
+    print("Uploading " + args.document + " ... ", end="")
+    PrintCenter.upload_file(session, options, args.document)
+    print("done")
 
     # save config file
     new_config = Config(color=config.color, sides=config.sides, pharos_user_token=
