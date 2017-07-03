@@ -42,6 +42,8 @@ import sys
 
 CONFIG_DIR = user_config_dir("utprint", "YoRyan")
 CONFIG_FILENAME = "config.ini"
+JOB_PROCESSING_POLL_TIME = 3
+BEVO_BUCKS_URL = "https://utdirect.utexas.edu/bevobucks/addBucks.WBX"
 
 Config = namedtuple("Config", ["color", "sides", "pharos_user_token"])
 
@@ -71,24 +73,28 @@ class PrintCenter:
 
         pharos_user_token -- value of the PharosAPI.X-PHAROS-USER-TOKEN cookie
 
-        Return a Requests.Session to interact with the Pharos API.
+        Return a tuple with a Requests.Session to interact with the Pharos API
+        and the available balance for printing.
         """
         session = requests.Session()
         session.cookies.set("PharosAPI.X-PHAROS-USER-TOKEN", pharos_user_token)
         response = session.get(PrintCenter.PRINT_SERVER + "/logon")
+        response_json = response.json()
         if response.status_code == requests.codes.ok:
-            # now includes additional cookies set by Pharos
-            return session
+            # session now includes additional cookies set by Pharos
+            balance = float(response_json["Balance"]["Amount"])
+            return (session, balance)
         else:
             session.close()
-            raise PrintCenter.PharosAPIError(response.json())
+            raise PrintCenter.PharosAPIError(response_json)
 
     def logon(credentials):
         """Initiate a session with Pharos.
 
         credentials -- (eid, password) tuple
 
-        Return a Requests.Session to interact with the Pharos API.
+        Return a tuple with a Requests.Session to interact with the Pharos API
+        and the available balance for printing.
         """
         credentials = (encode_uricomp(credentials[0]),
                        encode_uricomp(credentials[1]))
@@ -101,11 +107,13 @@ class PrintCenter:
         session = requests.Session()
         response = session.get(PrintCenter.PRINT_SERVER + "/logon",
                                params=params, headers=headers)
+        response_json = response.json()
         if response.status_code == requests.codes.ok:
-            return session
+            balance = float(response_json["Balance"]["Amount"])
+            return (session, balance)
         else:
             session.close()
-            raise PrintCenter.PharosAPIError(response.json())
+            raise PrintCenter.PharosAPIError(response_json)
 
     def upload_file(session, options, filepath):
         """Upload a file to Pharos.
@@ -220,20 +228,24 @@ def main():
     }
 
     session = None
+    balance = 0.0
 
     # login, try saved cookie if it exists then prompt for credentials
     if config.pharos_user_token is not None:
         new_script_status("Logging in with saved token")
         try:
-            resumed = PrintCenter.logon_with_cookie(config.pharos_user_token)
-            session = resumed
+            logon = PrintCenter.logon_with_cookie(config.pharos_user_token)
+            session = logon[0]
+            balance = logon[1]
             end_script_status("done")
         except PrintCenter.PharosAPIError:
             end_script_status("expired")
     if session is None:
         creds = get_credentials()
         new_script_status("Logging in")
-        session = PrintCenter.logon(creds)
+        logon = PrintCenter.logon(creds)
+        session = logon[0]
+        balance = logon[1]
         end_script_status("done")
 
     # upload document
@@ -243,14 +255,26 @@ def main():
 
     # wait for document to process
     new_script_status("Processing")
+    job_cost = 0.0
     job_processed = False
     while not job_processed:
-        sleep(3)
+        sleep(JOB_PROCESSING_POLL_TIME)
         jobs = PrintCenter.get_jobs(session)
         job_now = next((j for j in jobs if j.uid == job.uid), None)
         if job_now is not None and job_now.state == "Completed":
+            job_cost = job_now.cost
             job_processed = True
     end_script_status("done")
+
+    # show cost to print
+    print("Finances:")
+    print("    Available balance: " + money(balance))
+    print("    Cost to print:     " + money(job_cost))
+    print()
+    if job_cost <= balance:
+        print("    Remaining balance: " + money(balance - job_cost))
+    else:
+        print("  * Insufficent funds -- add Bevo Bucks at\n    " + BEVO_BUCKS_URL)
 
     # save config file
     new_config = Config(color=config.color, sides=config.sides, pharos_user_token=
@@ -297,11 +321,14 @@ def write_config_file(config):
         writer.write(f)
 
 def new_script_status(status):
+    """Print a new status message in progress."""
     print(status + " ... ", end="")
     sys.stdout.flush()
 
 def end_script_status(result):
+    """Resolve the last status."""
     print(result)
+    sys.stdout.flush()
 
 def get_credentials():
     """Prompt for the user's EID and password."""
@@ -326,6 +353,10 @@ def mimetype(filepath):
         return "application/octet-stream"
     else:
         return t[0]
+
+def money(f):
+    """Format a float as a dollar amount."""
+    return "${0:.2f}".format(f)
 
 if __name__ == "__main__":
     sys.exit(main())
