@@ -141,7 +141,7 @@ def main():
     # command-line arguments
     parser = argparse.ArgumentParser(description=
                                      "Upload a document to UT's Library Print System.")
-    parser.add_argument("--color", dest="color", choices=["color", "mono"], default=config.color,
+    parser.add_argument("--color", dest="color", choices=["full", "mono"], default=config.color,
                         help="print with or without color")
     parser.add_argument("--sides", dest="sides", type=int, choices=[1, 2], default=config.sides,
                         help="print single sided (simplex) or double sided (duplex)")
@@ -155,20 +155,44 @@ def main():
                         help="a file (PDF, image, MS Office...) to print")
     args = parser.parse_args()
 
-    # build print settings JSON
+    # confirm settings and build JSON
+    print("Print settings:")
+    foptions = {}
+
+    if args.color == "full":
+        print("  - Full color")
+        foptions["Mono"] = False
+    elif args.color == "mono":
+        print("  - Mono")
+        foptions["Mono"] = True
+
+    if args.sides == 1:
+        print("  - Simplex")
+        foptions["Duplex"] = False
+    elif args.sides== 2:
+        print("  - Duplex")
+        foptions["Duplex"] = True
+
     if args.two_pages:
-        pps = "2"
+        print("  - 2 pages per side")
+        foptions["PagesPerSide"] = "2"
     else:
-        pps = "1"
+        foptions["PagesPerSide"] = "1"
+
+    print("  - Copies: " + str(args.copies))
+    foptions["Copies"] = str(args.copies)
+
+    if args.range == "":
+        print("  - Page range: all")
+        foptions["PageRange"] = ""
+    else:
+        print("  - Page range: " + args.range)
+        foptions["PageRange"] = args.range
+
+    foptions["DefaultPageSize"] = "Letter" # what's this? not in the web UI
+
     options = {
-        "FinishingOptions": {
-            "Mono": args.color == "mono",
-            "Duplex": args.sides == 2,
-            "PagesPerSide": pps,
-            "Copies": str(args.copies),
-            "DefaultPageSize": "Letter", # what's this? not in the web UI
-            "PageRange": args.range
-        },
+        "FinishingOptions": foptions,
         "PrinterName": None
     }
 
@@ -209,7 +233,7 @@ def read_config_file():
     """Read user preferences from the configuration file.
 
     Return a Config tuple."""
-    color = "color"
+    color = "full"
     sides = 1
     token = None
     parser = configparser.ConfigParser()
@@ -217,7 +241,7 @@ def read_config_file():
     sections = parser.sections()
     if "PrintDefaults" in sections:
         fcolor = parser["PrintDefaults"].get("Color", None)
-        if fcolor == "color" or fcolor == "mono":
+        if fcolor == "full" or fcolor == "mono":
             color = fcolor
         fsides = parser["PrintDefaults"].get("Sides", None)
         if fsides == "1" or fsides == "2":
