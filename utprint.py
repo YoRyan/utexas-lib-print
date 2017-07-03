@@ -200,7 +200,7 @@ def main():
     if args.sides == 1:
         print("  - Simplex")
         foptions["Duplex"] = False
-    elif args.sides== 2:
+    elif args.sides == 2:
         print("  - Duplex")
         foptions["Duplex"] = True
 
