@@ -249,7 +249,7 @@ def main():
         end_script_status("done")
 
     # upload document
-    new_script_status("Uploading " + args.document)
+    new_script_status("Uploading " + os.path.basename(args.document))
     job = PrintCenter.upload_file(session, options, args.document)
     end_script_status("done")
 
