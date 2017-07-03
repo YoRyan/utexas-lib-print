@@ -49,9 +49,6 @@ class PrintCenter:
 
     PRINT_SERVER = "https://print.lib.utexas.edu/PharosAPI"
 
-    Error = namedtuple("Error", ["status", "user_message", "error_code",
-                                 "request"])
-
     class Error(Exception):
         """Base class for exceptions."""
         pass
