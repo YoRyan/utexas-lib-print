@@ -74,7 +74,7 @@ class PrintCenter:
         session.cookies.set("PharosAPI.X-PHAROS-USER-TOKEN", pharos_user_token)
         response = session.get(PrintCenter.PRINT_SERVER + "/logon")
         if response.status_code == requests.codes.ok:
-            # Now includes additional cookies set by Pharos.
+            # now includes additional cookies set by Pharos
             return session
         else:
             session.close()
