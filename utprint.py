@@ -96,14 +96,14 @@ class PrintCenter:
         Return a tuple with a Requests.Session to interact with the Pharos API
         and the available balance for printing.
         """
-        credentials = (encode_uricomp(credentials[0]),
-                       encode_uricomp(credentials[1]))
+        credentials = (_encode_uricomp(credentials[0]),
+                       _encode_uricomp(credentials[1]))
         params = {}
         params["KeepMeLoggedIn"] = "yes"
         headers = {}
         headers["X-Authorization"] = ("PHAROS-USER " +
-                                      encode_utf8_to_b64(credentials[0] + ":" +
-                                                         credentials[1]))
+                                      _encode_utf8_to_b64(credentials[0] + ":" +
+                                                          credentials[1]))
         session = requests.Session()
         response = session.get(PrintCenter.PRINT_SERVER + "/logon",
                                params=params, headers=headers)
@@ -127,7 +127,7 @@ class PrintCenter:
         files = [
             ("MetaData", (None, dumps(options))),
             ("content", (os.path.basename(filepath), open(filepath, "rb"),
-                         mimetype(filepath)))
+                         _mimetype(filepath)))
         ]
         response = session.post(PrintCenter._user_uri(session) + "/printjobs",
                                 files=files)
@@ -167,7 +167,7 @@ class PrintCenter:
 
 def main():
     # read config file
-    config = read_config_file()
+    config = _read_config_file()
 
     # command-line arguments
     parser = argparse.ArgumentParser(description=
@@ -232,34 +232,34 @@ def main():
 
     # login, try saved cookie if it exists then prompt for credentials
     if config.pharos_user_token is not None:
-        new_script_status("Logging in with saved token")
+        _new_script_status("Logging in with saved token")
         try:
             logon = PrintCenter.logon_with_cookie(config.pharos_user_token)
             session = logon[0]
             balance = logon[1]
-            end_script_status("done")
+            _end_script_status("done")
         except PrintCenter.PharosAPIError:
-            end_script_status("expired")
+            _end_script_status("expired")
     if session is None:
-        creds = get_credentials()
-        new_script_status("Logging in")
+        creds = _get_credentials()
+        _new_script_status("Logging in")
         logon = PrintCenter.logon(creds)
         session = logon[0]
         balance = logon[1]
-        end_script_status("done")
+        _end_script_status("done")
 
     # save authentication cookie to config file
     new_config = Config(color=config.color, sides=config.sides, pharos_user_token=
                         session.cookies["PharosAPI.X-PHAROS-USER-TOKEN"])
-    write_config_file(new_config)
+    _write_config_file(new_config)
 
     # upload document
-    new_script_status("Uploading " + os.path.basename(args.document))
+    _new_script_status("Uploading " + os.path.basename(args.document))
     job = PrintCenter.upload_file(session, options, args.document)
-    end_script_status("done")
+    _end_script_status("done")
 
     # wait for document to process
-    new_script_status("Processing")
+    _new_script_status("Processing")
     job_cost = 0.0
     job_processed = False
     while not job_processed:
@@ -269,22 +269,23 @@ def main():
         if job_now is not None and job_now.state == "Completed":
             job_cost = job_now.cost
             job_processed = True
-    end_script_status("done")
+    _end_script_status("done")
 
     # show cost to print
     print("Finances:")
-    print("    Available balance: " + money(balance))
-    print("    Cost to print:     " + money(job_cost))
+    print("    Available balance: " + _money(balance))
+    print("    Cost to print:     " + _money(job_cost))
     print()
     if job_cost <= balance:
-        print("    Remaining balance: " + money(balance - job_cost))
+        print("    Remaining balance: " + _money(balance - job_cost))
     else:
-        print("  * Insufficent funds -- add Bevo Bucks at\n    " + BEVO_BUCKS_URL)
+        print("  * Insufficent funds -- add Bevo Bucks at")
+        print("    " + BEVO_BUCKS_URL)
 
     session.close()
     return 0
 
-def read_config_file():
+def _read_config_file():
     """Read user preferences from the configuration file.
 
     Return a Config tuple."""
@@ -305,7 +306,7 @@ def read_config_file():
         token = parser["PersistentAuth"].get("Cookie", None)
     return Config(color=color, sides=sides, pharos_user_token=token)
 
-def write_config_file(config):
+def _write_config_file(config):
     """Save user preferences to the configuration file.
 
     config -- Config tuple of stuff to save
@@ -320,33 +321,33 @@ def write_config_file(config):
     with open(os.path.join(CONFIG_DIR, CONFIG_FILENAME), "w") as f:
         writer.write(f)
 
-def new_script_status(status):
+def _new_script_status(status):
     """Print a new status message in progress."""
     print(status + " ... ", end="")
     sys.stdout.flush()
 
-def end_script_status(result):
+def _end_script_status(result):
     """Resolve the last status."""
     print(result)
     sys.stdout.flush()
 
-def get_credentials():
+def _get_credentials():
     """Prompt for the user's EID and password."""
     eid = input("\nEID: ")
     password = getpass()
     print()
     return (eid, password)
 
-def encode_utf8_to_b64(s):
+def _encode_utf8_to_b64(s):
     """Emulates Pharos's DIY base-64 encoder."""
     return b64encode(bytes(s, "utf-8")).decode("ascii")
 
 # https://stackoverflow.com/questions/946170/equivalent-javascript-functions-for-pythons-urllib-quote-and-urllib-unquote
-def encode_uricomp(s):
+def _encode_uricomp(s):
     """Emulates JavaScript's encodeURIComponent()."""
     return quote(s, safe="~()*!.'")
 
-def mimetype(filepath):
+def _mimetype(filepath):
     """Guess the mimetype of a file."""
     t = guess_type(filepath)
     if t[0] is None:
@@ -354,7 +355,7 @@ def mimetype(filepath):
     else:
         return t[0]
 
-def money(f):
+def _money(f):
     """Format a float as a dollar amount."""
     return "${0:.2f}".format(f)
 
