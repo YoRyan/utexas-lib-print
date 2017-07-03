@@ -140,7 +140,7 @@ def main():
 
     # command-line arguments
     parser = argparse.ArgumentParser(description=
-                                     "Upload documents to UT's Library Print System.")
+                                     "Upload a document to UT's Library Print System.")
     parser.add_argument("--color", dest="color", choices=["color", "mono"], default=config.color,
                         help="print with or without color")
     parser.add_argument("--sides", dest="sides", type=int, choices=[1, 2], default=config.sides,
@@ -151,7 +151,7 @@ def main():
                         help="print multiple copies")
     parser.add_argument("--range", dest="range", default="",
                         help="print a specific set of pages (e.g. '1-5, 8, 11-13')")
-    parser.add_argument("document", nargs="+",
+    parser.add_argument("document",
                         help="a file (PDF, image, MS Office...) to print")
     args = parser.parse_args()
 
@@ -189,14 +189,13 @@ def main():
         session = PrintCenter.logon(creds)
         print("done")
 
-    # upload each document
-    for d in args.document:
-        print("Uploading " + d + " ... ", end="")
-        try:
-            PrintCenter.upload_file(session, options, d)
-            print("done")
-        except PrintCenter.PharosAPIError as err:
-            print(str(err.status) + " error: " + err.user_message)
+    # upload document
+    try:
+        print("Uploading " + args.document + " ... ", end="")
+        PrintCenter.upload_file(session, options, args.document)
+        print("done")
+    except PrintCenter.PharosAPIError as err:
+        print(str(err.status) + " error: " + err.user_message)
 
     # save config file
     new_config = Config(color=config.color, sides=config.sides, pharos_user_token=
